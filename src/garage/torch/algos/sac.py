@@ -25,8 +25,10 @@ class SAC(OffPolicyRLAlgorithm):
     def __init__(self,
                  env_spec,
                  policy,
-                 qf,
+                 qf1,
+                 qf2,
                  replay_buffer,
+                 discount=0.99,
                  n_epoch_cycles=20,
                  n_train_steps=50,
                  max_path_length=None,
@@ -34,10 +36,9 @@ class SAC(OffPolicyRLAlgorithm):
                  min_buffer_size=int(1e4),
                  rollout_batch_size=1,
                  exploration_strategy=None,
-                 target_update_tau=0.01,
-                 policy_lr=1e-4,
+                 target_update_tau=1e-2,
+                 policy_lr=1e-3,
                  qf_lr=1e-3,
-                 discount=0.99,
                  policy_weight_decay=0,
                  qf_weight_decay=0,
                  optimizer=torch.optim.Adam,
@@ -46,7 +47,11 @@ class SAC(OffPolicyRLAlgorithm):
                  max_action=None,
                  reward_scale=1.,
                  smooth_return=True):
-        
+
+        self.policy = policy
+        self.qf1 = qf1
+        self.qf2 = qf2
+
         action_bound = env_spec.action_space.high
         self.tau = target_update_tau
         self.policy_lr = policy_lr
@@ -60,7 +65,7 @@ class SAC(OffPolicyRLAlgorithm):
 
         super().__init__(env_spec=env_spec,
                          policy=policy,
-                         qf=qf,
+                         qf=qf1,
                          n_train_steps=n_train_steps,
                          n_epoch_cycles=n_epoch_cycles,
                          max_path_length=max_path_length,
@@ -75,11 +80,12 @@ class SAC(OffPolicyRLAlgorithm):
                          smooth_return=smooth_return)
     
         self.target_policy = copy.deepcopy(self.policy)
-        self.target_qf1 = copy.deepcopy(self.qf)
-        self.target_qf2 = copy.deepcopy(self.qf)
+        self.target_qf1 = copy.deepcopy(self.qf1)
+        self.target_qf2 = copy.deepcopy(self.qf2)
         self.policy_optimizer = optimizer(self.policy.parameters(),
                                             lr=self.policy_lr)
-        self.qf_optimizer = optimizer(self.qf.parameters(), lr=self.qf_lr)
+        self.qf1_optimizer = optimizer(self.qf1.parameters(), lr=self.qf_lr)
+        self.qf2_optimizer = optimizer(self.qf2.parameters(), lr=self.qf_lr)
 
     def optimize_policy(self, itr, samples):
         """
