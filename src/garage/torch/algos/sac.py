@@ -28,6 +28,8 @@ class SAC(OffPolicyRLAlgorithm):
                  qf1,
                  qf2,
                  replay_buffer,
+                 target_entropy=None,
+                 use_automatic_entropy_tuning=True,
                  discount=0.99,
                  n_epoch_cycles=20,
                  n_train_steps=50,
@@ -80,12 +82,40 @@ class SAC(OffPolicyRLAlgorithm):
                          smooth_return=smooth_return)
     
         self.target_policy = copy.deepcopy(self.policy)
+        # use 2 target q networks
         self.target_qf1 = copy.deepcopy(self.qf1)
         self.target_qf2 = copy.deepcopy(self.qf2)
         self.policy_optimizer = optimizer(self.policy.parameters(),
                                             lr=self.policy_lr)
         self.qf1_optimizer = optimizer(self.qf1.parameters(), lr=self.qf_lr)
         self.qf2_optimizer = optimizer(self.qf2.parameters(), lr=self.qf_lr)
+
+        # automatic entropy coefficient tuning
+        self.use_automatic_entropy_tuning = use_automatic_entropy_tuning
+        if self.use_automatic_entropy_tuning:
+            if target_entropy:
+                self.target_entropy = target_entropy
+            else:
+                self.target_entropy = -np.prod(self.env_spec.action_space.shape).item()
+
+    # 0) update policy using updated min q function
+    # 1) compute targets from Q functions
+    # 2) update Q functions using optimizer
+    # 3) query Q functons, take min of those functions
+    def train_once(self, itr, paths):
+        """
+        """
+        paths = self.process_samples(itr, paths)
+        epoch = itr / self.n_epoch_cycles
+
+        rewards = paths['rewards']
+        terminals = paths['terminals']
+        obs = paths['observations']
+        actions = paths['actions']
+        # is this the right thing for next_obs?
+        # or do I have to compute the next obs with the policy
+        # 
+
 
     def optimize_policy(self, itr, samples):
         """
@@ -96,7 +126,6 @@ class SAC(OffPolicyRLAlgorithm):
             qval_loss: Loss of Q-value predicted by the Q-network.
             ys: y_s.
             qval: Q-value predicted by the Q-network.
-
         """
         pass
 
