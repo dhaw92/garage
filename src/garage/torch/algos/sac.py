@@ -17,11 +17,12 @@ class SAC(OffPolicyRLAlgorithm):
     optimization and DDPG-style approaches.
     A central feature of SAC is entropy regularization. The policy is trained
     to maximize a trade-off between expected return and entropy, a measure of
-    randomness in the policy. This has a close connection to the 
+    randomness in the policy. This has a close connection to the
     exploration-exploitation trade-off: increasing entropy results in more
     exploration, which can accelerate learning later on. It can also prevent
     the policy from prematurely converging to a bad local optimum.
     """
+
     def __init__(self,
                  env_spec,
                  policy,
@@ -48,7 +49,8 @@ class SAC(OffPolicyRLAlgorithm):
                  clip_return=np.inf,
                  max_action=None,
                  reward_scale=1.,
-                 smooth_return=True):
+                 smooth_return=True,
+                 input_include_goal=False):
 
         self.policy = policy
         self.qf1 = qf1
@@ -64,6 +66,7 @@ class SAC(OffPolicyRLAlgorithm):
         self.clip_return = clip_return
         self.max_action = action_bound if max_action is None else max_action
         self.evaluate = False
+        self.input_include_goal = input_include_goal
 
         super().__init__(env_spec=env_spec,
                          policy=policy,
@@ -80,13 +83,13 @@ class SAC(OffPolicyRLAlgorithm):
                          discount=discount,
                          reward_scale=reward_scale,
                          smooth_return=smooth_return)
-    
+
         self.target_policy = copy.deepcopy(self.policy)
         # use 2 target q networks
         self.target_qf1 = copy.deepcopy(self.qf1)
         self.target_qf2 = copy.deepcopy(self.qf2)
         self.policy_optimizer = optimizer(self.policy.parameters(),
-                                            lr=self.policy_lr)
+                                          lr=self.policy_lr)
         self.qf1_optimizer = optimizer(self.qf1.parameters(), lr=self.qf_lr)
         self.qf2_optimizer = optimizer(self.qf2.parameters(), lr=self.qf_lr)
 
@@ -96,7 +99,8 @@ class SAC(OffPolicyRLAlgorithm):
             if target_entropy:
                 self.target_entropy = target_entropy
             else:
-                self.target_entropy = -np.prod(self.env_spec.action_space.shape).item()
+                self.target_entropy = -np.prod(
+                    self.env_spec.action_space.shape).item()
 
     # 0) update policy using updated min q function
     # 1) compute targets from Q functions
@@ -112,10 +116,34 @@ class SAC(OffPolicyRLAlgorithm):
         terminals = paths['terminals']
         obs = paths['observations']
         actions = paths['actions']
-        # is this the right thing for next_obs?
-        # or do I have to compute the next obs with the policy
-        # 
+        next_obs = paths['next_obs']
+        # check if these exist in the patgh
+        goal = paths['goal']
+        achieved_goal = paths['achieved_goal']
 
+        # add new transitions to the replay buffer
+        if self.input_include_goal:
+            self.replay_buffer.add_transitions(
+                observation=obs,
+                action=actions,
+                goal=d_g,
+                achieved_goal=a_g,
+                terminal=dones,
+                next_observation=[
+                    next_obs['observation'] for next_obs in next_obses
+                ],
+                next_achieved_goal=[
+                    next_obs['achieved_goal'] for next_obs in next_obses
+                ],
+            )
+        else:
+            self.algo.replay_buffer.add_transitions(
+                observation=obses,
+                action=actions,
+                reward=rewards * self.algo.reward_scale,
+                terminal=dones,
+                next_observation=next_obses,
+            )
 
     def optimize_policy(self, itr, samples):
         """
