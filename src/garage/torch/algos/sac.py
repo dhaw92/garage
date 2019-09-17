@@ -112,7 +112,7 @@ class SAC(OffPolicyRLAlgorithm):
         # add paths to replay buffer
 
         # add new transitions to the replay buffer
-        
+
     def optimize_policy(self, itr, samples):
         """
         Perform algorithm optimizing.
@@ -143,7 +143,7 @@ class SAC(OffPolicyRLAlgorithm):
             Args:
                 - paths (dict): dictionary containing transition info
                                 e.g. s,a,r,s', terminal state, goal state
-                                
+
         """
         paths = self.process_samples(itr, paths)
         epoch = itr / self.n_epoch_cycles
