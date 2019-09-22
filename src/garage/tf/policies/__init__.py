@@ -8,8 +8,6 @@ from garage.tf.policies.categorical_gru_policy import CategoricalGRUPolicy
 from garage.tf.policies.categorical_gru_policy_with_model import (
     CategoricalGRUPolicyWithModel)
 from garage.tf.policies.categorical_lstm_policy import CategoricalLSTMPolicy
-from garage.tf.policies.categorical_lstm_policy_with_model import (
-    CategoricalLSTMPolicyWithModel)
 from garage.tf.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from garage.tf.policies.categorical_mlp_policy_with_model import (
     CategoricalMLPPolicyWithModel)
@@ -27,8 +25,8 @@ __all__ = [
     'Policy', 'StochasticPolicy', 'CategoricalConvPolicy',
     'CategoricalConvPolicyWithModel', 'CategoricalGRUPolicy',
     'CategoricalGRUPolicyWithModel', 'CategoricalLSTMPolicy',
-    'CategoricalLSTMPolicyWithModel', 'CategoricalMLPPolicy',
-    'CategoricalMLPPolicyWithModel', 'ContinuousMLPPolicy',
-    'DiscreteQfDerivedPolicy', 'DeterministicMLPPolicy', 'GaussianGRUPolicy',
-    'GaussianLSTMPolicy', 'GaussianGRUPolicyWithModel', 'GaussianMLPPolicy'
+    'CategoricalMLPPolicy', 'CategoricalMLPPolicyWithModel',
+    'ContinuousMLPPolicy', 'DiscreteQfDerivedPolicy', 'DeterministicMLPPolicy',
+    'GaussianGRUPolicy', 'GaussianLSTMPolicy', 'GaussianGRUPolicyWithModel',
+    'GaussianMLPPolicy'
 ]
