@@ -137,45 +137,45 @@ class SAC(OffPolicyRLAlgorithm):
             t_param.data.copy_(t_param.data * (1.0 - self.tau) +
                                param.data * self.tau)
 
-    def _add_transitions(self, paths):
-        """ Add dictionary of paths(experience) to replay buffer.
+    # def _add_transitions(self, paths):
+    #     """ Add dictionary of paths(experience) to replay buffer.
 
-            Args:
-                - paths (dict): dictionary containing transition info
-                                e.g. s,a,r,s', terminal state, goal state
+    #         Args:
+    #             - paths (dict): dictionary containing transition info
+    #                             e.g. s,a,r,s', terminal state, goal state
 
-        """
-        paths = self.process_samples(itr, paths)
-        epoch = itr / self.n_epoch_cycles
+    #     """
+    #     paths = self.process_samples(itr, paths)
+    #     epoch = itr / self.n_epoch_cycles
 
-        rewards = paths['rewards']
-        terminals = paths['terminals']
-        obs = paths['observations']
-        actions = paths['actions']
-        next_obs = paths['next_obs']
-        # check if these exist in the patgh
-        goal = paths['goal']
-        achieved_goal = paths['achieved_goal']
+    #     rewards = paths['rewards']
+    #     terminals = paths['terminals']
+    #     obs = paths['observations']
+    #     actions = paths['actions']
+    #     next_obs = paths['next_obs']
+    #     # check if these exist in the patgh
+    #     goal = paths['goal']
+    #     achieved_goal = paths['achieved_goal']
 
-        if self.input_include_goal:
-            self.replay_buffer.add_transitions(
-                observation=obs,
-                action=actions,
-                goal=d_g,
-                achieved_goal=a_g,
-                terminal=dones,
-                next_observation=[
-                    next_obs['observation'] for next_obs in next_obses
-                ],
-                next_achieved_goal=[
-                    next_obs['achieved_goal'] for next_obs in next_obses
-                ],
-            )
-        else:
-            self.algo.replay_buffer.add_transitions(
-                observation=obses,
-                action=actions,
-                reward=rewards * self.algo.reward_scale,
-                terminal=dones,
-                next_observation=next_obses,
-            )
+    #     if self.input_include_goal:
+    #         self.replay_buffer.add_transitions(
+    #             observation=obs,
+    #             action=actions,
+    #             goal=d_g,
+    #             achieved_goal=a_g,
+    #             terminal=dones,
+    #             next_observation=[
+    #                 next_obs['observation'] for next_obs in next_obses
+    #             ],
+    #             next_achieved_goal=[
+    #                 next_obs['achieved_goal'] for next_obs in next_obses
+    #             ],
+    #         )
+    #     else:
+    #         self.algo.replay_buffer.add_transitions(
+    #             observation=obses,
+    #             action=actions,
+    #             reward=rewards * self.algo.reward_scale,
+    #             terminal=dones,
+    #             next_observation=next_obses,
+    #         )
