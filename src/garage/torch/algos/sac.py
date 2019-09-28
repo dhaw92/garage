@@ -4,6 +4,7 @@ import copy
 from dowel import logger, tabular
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from garage.np.algos.off_policy_rl_algorithm import OffPolicyRLAlgorithm
 from garage.torch.utils import np_to_torch, torch_to_np
@@ -32,8 +33,6 @@ class SAC(OffPolicyRLAlgorithm):
                  target_entropy=None,
                  use_automatic_entropy_tuning=True,
                  discount=0.99,
-                 n_epoch_cycles=20,
-                 n_train_steps=50,
                  max_path_length=None,
                  buffer_batch_size=64,
                  min_buffer_size=int(1e4),
@@ -55,7 +54,7 @@ class SAC(OffPolicyRLAlgorithm):
         self.policy = policy
         self.qf1 = qf1
         self.qf2 = qf2
-
+        self.replay_buffer = replay_buffer
         action_bound = env_spec.action_space.high
         self.tau = target_update_tau
         self.policy_lr = policy_lr
@@ -71,8 +70,8 @@ class SAC(OffPolicyRLAlgorithm):
         super().__init__(env_spec=env_spec,
                          policy=policy,
                          qf=qf1,
-                         n_train_steps=n_train_steps,
-                         n_epoch_cycles=n_epoch_cycles,
+                         n_train_steps=0,
+                         n_epoch_cycles=1,
                          max_path_length=max_path_length,
                          buffer_batch_size=buffer_batch_size,
                          min_buffer_size=min_buffer_size,
@@ -102,6 +101,9 @@ class SAC(OffPolicyRLAlgorithm):
                 self.target_entropy = -np.prod(
                     self.env_spec.action_space.shape).item()
 
+        self.episode_rewards = []
+        self. success_history = []
+
     # 0) update policy using updated min q function
     # 1) compute targets from Q functions
     # 2) update Q functions using optimizer
@@ -109,13 +111,59 @@ class SAC(OffPolicyRLAlgorithm):
     def train_once(self, itr, paths):
         """
         """
+        paths = self.process_samples(itr, paths)
+        epoch = itr / self.n_epoch_cycles
+        self.episode_rewards.extend([
+            path for path, complete in zip(paths['undiscounted_returns'],
+                                           paths['complete']) if complete
+        ])
+        self.success_history.extend([
+            path for path, complete in zip(paths['success_history'],
+                                           paths['complete']) if complete
+        ])
+        last_average_return = np.mean(self.episode_rewards)
         # add paths to replay buffer
+        for train_itr in range(self.n_train_steps):
+            if self.replay_buffer.n_transitions_stored >= self.min_buffer_size:  # noqa: E501
+                samples = self.replay_buffer.sample(self.buffer_batch_size)
+                self.update_q_functions(itr, samples)
+                self.optimize_policy(itr, samples)
+                self.adjust_temperature(itr)
+                self.update_targets()
 
-        # add new transitions to the replay buffer
+        return last_average_return
+
+    def update_q_functions(self, itr, samples):
+        """ Update the q functions using the target q_functions.
+
+        Args:
+            itr (int) - current training iteration
+            samples() - samples recovered from the replay buffer
+        """
+        obs = samples["obs"]
+        actions = samples["actions"]
+        rewards = samples["rewards"]
+        next_obs = samples["new_obs"]
+
+        next_actions = self.policy.get_actions(torch.tensor(next_obs))
+        next_ll = self.policy.log_likelihood(torch.Tensor(next_obs),
+                                           torch.Tensor())
+
+        qfs = [self.qf1, self.qf2]
+        target_qfs = [self.target_qf1, self.target_qf2]
+        qfs = [self.qf1, self.qf2]
+        qf_optimizers = [self.qf1_optimizer, self.qf2_optimizer] 
+        for target_qf, qf, qf_optimizer in zip(target_qfs, qfs, qf_optimizers):
+            curr_q_val = qf(obs, actions)
+            bootstrapped_value = target_qf(next_obs, next_actions) - (self.alpha * next_ll)
+            bellman = rewards + self.discount*(bootstrapped_value)
+            q_objective = 0.5 * F.mse_loss(curr_q_val, bellman)
+            qf_optimizer.zero_grad()
+            q_objective.backwards()
+            qf_optimizer.step()
 
     def optimize_policy(self, itr, samples):
-        """
-        Perform algorithm optimizing.
+        """ Perform algorithm optimizing.
 
         Returns:
             action_loss: Loss of action predicted by the policy network.
@@ -125,17 +173,19 @@ class SAC(OffPolicyRLAlgorithm):
         """
         pass
 
-    def update_target(self):
-        """Update parameters in the target policy and Q-value network."""
-        for t_param, param in zip(self.target_qf.parameters(),
-                                  self.qf.parameters()):
-            t_param.data.copy_(t_param.data * (1.0 - self.tau) +
-                               param.data * self.tau)
+    def adjust_temperature(self, itr):        
+        pass
 
-        for t_param, param in zip(self.target_policy.parameters(),
-                                  self.policy.parameters()):
-            t_param.data.copy_(t_param.data * (1.0 - self.tau) +
-                               param.data * self.tau)
+    def update_targets(self):
+        """Update parameters in the target q-functions."""
+        # update for target_qf1
+        target_qfs = [self.target_qf1, self.target_qf2]
+        qfs = [self.qf1, self.qf2]
+        for target_qf, qf in zip(target_qfs, qfs):
+                for t_param, param in zip(target_qf.parameters(),
+                                            qf.parameters()):
+                        t_param.data.copy_(t_param.data * (1.0 - self.tau) +
+                                        param.data * self.tau)
 
     # def _add_transitions(self, paths):
     #     """ Add dictionary of paths(experience) to replay buffer.
