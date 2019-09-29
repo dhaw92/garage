@@ -221,7 +221,6 @@ def run_experiment(method_call=None,
                    dry=False,
                    env=None,
                    variant=None,
-                   use_tf=False,
                    use_gpu=False,
                    pre_commands=None,
                    **kwargs):
@@ -240,11 +239,8 @@ def run_experiment(method_call=None,
             commands without executing them.
         env (dict): Extra environment variables.
         variant (dict): If provided, should be a dictionary of parameters.
-        use_tf (bool): Used along with the Theano and GPU configuration
-            when using TensorFlow
         use_gpu (bool): Whether the launched task is running on GPU.
-            This triggers a few configuration changes including certain
-            environment flags.
+            It assumes proper configuration of CUDA to use GPU.
         pre_commands (str): Pre commands to run the experiment.
 
     """
@@ -272,11 +268,8 @@ def run_experiment(method_call=None,
 
     global exp_count
 
-    if use_tf:
-        if not use_gpu:
-            os.environ['CUDA_VISIBLE_DEVICES'] = ''
-        else:
-            os.unsetenv('CUDA_VISIBLE_DEVICES')
+    if not use_gpu:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
     for task in batch_tasks:
         call = task.pop('method_call')
@@ -305,7 +298,6 @@ def run_experiment(method_call=None,
             del task['variant']
         task['env'] = task.get('env', dict()) or dict()
         task['env']['GARAGE_USE_GPU'] = str(use_gpu)
-        task['env']['GARAGE_USE_TF'] = str(use_tf)
 
     for task in batch_tasks:
         env = task.pop('env', None)
