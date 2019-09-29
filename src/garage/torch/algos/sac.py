@@ -29,9 +29,10 @@ class SAC(OffPolicyRLAlgorithm):
                  policy,
                  qf1,
                  qf2,
+                 alpha,
                  replay_buffer,
                  target_entropy=None,
-                 use_automatic_entropy_tuning=True,
+                 use_automatic_entropy_tuning=False,
                  discount=0.99,
                  max_path_length=None,
                  buffer_batch_size=64,
@@ -54,8 +55,8 @@ class SAC(OffPolicyRLAlgorithm):
         self.policy = policy
         self.qf1 = qf1
         self.qf2 = qf2
+        self.alpha = alpha
         self.replay_buffer = replay_buffer
-        action_bound = env_spec.action_space.high
         self.tau = target_update_tau
         self.policy_lr = policy_lr
         self.qf_lr = qf_lr
@@ -63,7 +64,6 @@ class SAC(OffPolicyRLAlgorithm):
         self.qf_weight_decay = qf_weight_decay
         self.clip_pos_returns = clip_pos_returns
         self.clip_return = clip_return
-        self.max_action = action_bound if max_action is None else max_action
         self.evaluate = False
         self.input_include_goal = input_include_goal
 
@@ -145,7 +145,8 @@ class SAC(OffPolicyRLAlgorithm):
         rewards = samples["rewards"]
         next_obs = samples["new_obs"]
 
-        next_actions = self.policy.get_actions(torch.tensor(next_obs))
+        import ipdb; ipdb.set_trace()
+        next_actions = self.policy.get_actions(torch.Tensor(next_obs))
         next_ll = self.policy.log_likelihood(torch.Tensor(next_obs),
                                            torch.Tensor())
 
@@ -155,7 +156,9 @@ class SAC(OffPolicyRLAlgorithm):
         qf_optimizers = [self.qf1_optimizer, self.qf2_optimizer] 
         for target_qf, qf, qf_optimizer in zip(target_qfs, qfs, qf_optimizers):
             curr_q_val = qf(obs, actions)
-            bootstrapped_value = target_qf(next_obs, next_actions) - (self.alpha * next_ll)
+            with torch.no_grad():
+                targ_out = target_qf(next_obs, next_actions)
+            bootstrapped_value = targ_out - (self.alpha * next_ll)
             bellman = rewards + self.discount*(bootstrapped_value)
             q_objective = 0.5 * F.mse_loss(curr_q_val, bellman)
             qf_optimizer.zero_grad()
@@ -163,15 +166,29 @@ class SAC(OffPolicyRLAlgorithm):
             qf_optimizer.step()
 
     def optimize_policy(self, itr, samples):
-        """ Perform algorithm optimizing.
+        """ Optimize the policy based on the policy objective from the sac paper.
 
+        Args:
+            itr (int) - current training iteration
+            samples() - samples recovered from the replay buffer
         Returns:
-            action_loss: Loss of action predicted by the policy network.
-            qval_loss: Loss of Q-value predicted by the Q-network.
-            ys: y_s.
-            qval: Q-value predicted by the Q-network.
+            None
         """
-        pass
+
+        obs = samples["obs"]
+        # use the forward function instead of the get action function
+        # in order to make sure that policy is differentiated. 
+        action_dists = self.policy(obs)
+        actions = action_dists.rsample()
+        with torch.no_grad():
+            log_pi = self.policy.log_likelihood(obs,actions)
+        with torch.no_grad():
+            min_q = torch.min(self.qf1(obs, actions), self.qf2(obs, actions))
+
+        policy_objective = ((self.alpha * log_pi) - min_q).mean()
+        self.policy_optimizer.zero_grad()
+        policy_objective.backwards()
+        self.policy_optimizer.step()
 
     def adjust_temperature(self, itr):        
         pass
